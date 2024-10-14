@@ -48,16 +48,6 @@ on:
         type: string
         required: false
         default: ''
-      GOOGLE_IMG:
-        description: "The URL to use building/pushing gcr image targets (e.g. apecloud-prod/controller-manager/apecloud)"
-        type: string
-        required: false
-        default: ''
-      GOOGLE_REGISTRY_URL:
-        description: "The GOOGLE REGISTRY URL to use building/pushing image targets (e.g. us-east1-docker.pkg.dev)"
-        type: string
-        required: false
-        default: ''
       GIT_CONFIG:
         description: "InsteadOf git config global url (default: false)"
         type: boolean
@@ -123,20 +113,22 @@ on:
         type: string
         required: false
         default: ''
+      SET_REGISTRY:
+        description: "Specify image registry (dockerhub/aliyun/aliyunnew)"
+        type: string
+        required: false
+        default: ''
 
 env:
   DOCKER_REGISTRY_URL: docker.io
   ALIYUN_REGISTRY_URL: apecloud-registry.cn-zhangjiakou.cr.aliyuncs.com
   ALIYUN_REGISTRY_URL_NEW: infracreate-registry.cn-zhangjiakou.cr.aliyuncs.com
-  GOOGLE_REGISTRY_URL: us-east1-docker.pkg.dev
   DOCKER_USER: ${{ secrets.DOCKER_REGISTRY_USER }}
   DOCKER_PASSWORD: ${{ secrets.DOCKER_REGISTRY_PASSWORD }}
   ALIYUN_USER: ${{ secrets.ALIYUN_REGISTRY_USER }}
   ALIYUN_PASSWORD: ${{ secrets.ALIYUN_REGISTRY_PASSWORD }}
   ALIYUN_USER_NEW: ${{ secrets.ALIYUN_USER_NEW }}
   ALIYUN_PASSWORD_NEW: ${{ secrets.ALIYUN_PASSWORD_NEW }}
-  GOOGLE_CREDENTIALS: ${{ secrets.GOOGLE_CREDENTIALS }}
-  GOOGLE_SERVICE_ACCOUNT: ${{ secrets.GOOGLE_SERVICE_ACCOUNT }}
   GITHUB_USER: ${{ secrets.PERSONAL_ACCESS_USER }}
   GITHUB_TOKEN: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
   CONTROLLER_MANAGER_CFG: ${{ secrets.CONTROLLER_MANAGER_CFG }}
@@ -223,7 +215,7 @@ jobs:
           fi
           echo TAG-NAME=$tag_name >> $GITHUB_OUTPUT
 
-      - if: ${{ env.DOCKER_USER != '' && env.DOCKER_PASSWORD != '' }}
+      - if: ${{ env.DOCKER_USER != '' && env.DOCKER_PASSWORD != '' && (inputs.SET_REGISTRY == '' || inputs.SET_REGISTRY == 'dockerhub') }}
         name: Login to Docker Hub
         uses: docker/login-action@v2
         with:
@@ -231,7 +223,7 @@ jobs:
           username: ${{ env.DOCKER_USER }}
           password: ${{ env.DOCKER_PASSWORD }}
 
-      - if: ${{ env.DOCKER_USER != '' && env.DOCKER_PASSWORD != '' }}
+      - if: ${{ env.DOCKER_USER != '' && env.DOCKER_PASSWORD != '' && (inputs.SET_REGISTRY == '' || inputs.SET_REGISTRY == 'dockerhub') }}
         name: Build and Push to Docker Hub
         run: |
           cmd="make ${{ inputs.MAKE_OPS }} "
@@ -269,7 +261,7 @@ jobs:
           
           eval "$cmd"
 
-      - if: ${{ env.ALIYUN_USER != '' && env.ALIYUN_PASSWORD != '' }}
+      - if: ${{ env.ALIYUN_USER != '' && env.ALIYUN_PASSWORD != '' && (inputs.SET_REGISTRY == '' || inputs.SET_REGISTRY == 'aliyun') }}
         name: Login to Aliyun Registry
         uses: docker/login-action@v2
         with:
@@ -277,7 +269,7 @@ jobs:
           username: ${{ env.ALIYUN_USER }}
           password: ${{ env.ALIYUN_PASSWORD }}
 
-      - if: ${{ env.ALIYUN_USER != '' && env.ALIYUN_PASSWORD != ''  }}
+      - if: ${{ env.ALIYUN_USER != '' && env.ALIYUN_PASSWORD != '' && (inputs.SET_REGISTRY == '' || inputs.SET_REGISTRY == 'aliyun')  }}
         name: Build and Push to Aliyun Registry
         run: |
           cmd="make ${{ inputs.MAKE_OPS }} "
@@ -315,7 +307,7 @@ jobs:
           
           eval "$cmd"
 
-      - if: ${{ env.ALIYUN_USER_NEW != '' && env.ALIYUN_PASSWORD_NEW != '' }}
+      - if: ${{ env.ALIYUN_USER_NEW != '' && env.ALIYUN_PASSWORD_NEW != '' && (inputs.SET_REGISTRY == '' || inputs.SET_REGISTRY == 'aliyunnew') }}
         name: Login to Aliyun Registry New
         uses: docker/login-action@v2
         with:
@@ -323,7 +315,7 @@ jobs:
           username: ${{ env.ALIYUN_USER_NEW }}
           password: ${{ env.ALIYUN_PASSWORD_NEW }}
 
-      - if: ${{ env.ALIYUN_USER_NEW != '' && env.ALIYUN_PASSWORD_NEW != ''  }}
+      - if: ${{ env.ALIYUN_USER_NEW != '' && env.ALIYUN_PASSWORD_NEW != '' && (inputs.SET_REGISTRY == '' || inputs.SET_REGISTRY == 'aliyunnew')  }}
         name: Build and Push to Aliyun Registry New
         run: |
           cmd="make ${{ inputs.MAKE_OPS }} "
@@ -349,62 +341,6 @@ jobs:
             cmd=$cmd"IMG=${{ env.ALIYUN_REGISTRY_URL_NEW }}/${{ inputs.IMG }} "
           elif [[ -n "${{ inputs.REPOSITORY }}" ]]; then
             cmd=$cmd"REPOSITORY=${{ env.ALIYUN_REGISTRY_URL_NEW }}/${{ inputs.REPOSITORY }} "
-          fi
-          
-          if [[ ! -z "${{ inputs.MAKE_ARGS }}" ]]; then
-            cmd=$cmd" \"${{ inputs.MAKE_ARGS }}\" "
-          fi
-          
-          if [[ ! -z "${{ inputs.IMAGE_NAME }}" ]]; then
-            cmd=$cmd"IMAGE_NAME=${{ inputs.IMAGE_NAME }} "
-          fi
-          
-          eval "$cmd"
-
-      - if: ${{ env.GOOGLE_CREDENTIALS != '' }}
-        id: 'auth'
-        name: 'Authenticate to Google Cloud'
-        uses: 'google-github-actions/auth@v1'
-        with:
-          credentials_json: '${{ env.GOOGLE_CREDENTIALS }}'
-
-      - if: ${{ env.GOOGLE_CREDENTIALS != '' && env.GOOGLE_SERVICE_ACCOUNT != ''  }}
-        name: Build and Push to Google Registry
-        run: |
-          GOOGLE_REGISTRY_URL=${{ inputs.GOOGLE_REGISTRY_URL }}
-          if [ -z "$GOOGLE_REGISTRY_URL" ]; then
-              GOOGLE_REGISTRY_URL=${{ env.GOOGLE_REGISTRY_URL }}
-          fi
-          
-          gcloud auth activate-service-account \
-             ${{ env.GOOGLE_SERVICE_ACCOUNT }} \
-             --key-file=${{ steps.auth.outputs.credentials_file_path }}
-          
-          gcloud auth configure-docker $GOOGLE_REGISTRY_URL
-          
-          cmd="make ${{ inputs.MAKE_OPS }} "
-          cmd=$cmd"BUILDX_PLATFORMS=${{ inputs.BUILDX_PLATFORMS }} "
-          cmd=$cmd"BUILDX_ENABLED=${{ inputs.BUILDX_ENABLED }} "
-          cmd=$cmd"BUILDX_ARGS=\"${{ env.DEFAULT_BUILDX_ARGS }} ${{ inputs.BUILDX_ARGS }}\" "
-          
-          if [[ ! -z "${{ inputs.EXTRA_BUILD_ARGS }}" ]]; then
-              if [[ "${{ inputs.ARGS_TOKEN }}" == "true" ]]; then
-                  cmd=$cmd"EXTRA_BUILD_ARGS=\"${{ inputs.EXTRA_BUILD_ARGS }} --build-arg GITHUB_TOKEN=${{ env.GITHUB_TOKEN }} \" "
-              else
-                  cmd=$cmd"EXTRA_BUILD_ARGS=\"${{ inputs.EXTRA_BUILD_ARGS }}\" "
-              fi
-          elif [[ "${{ inputs.ARGS_TOKEN }}" == "true" ]]; then
-              cmd=$cmd"EXTRA_BUILD_ARGS=\"--build-arg GITHUB_TOKEN=${{ env.GITHUB_TOKEN }} \" "
-          fi
-          
-          if [[ ! -z "${{ inputs.VERSION }}" ]]; then
-            cmd=$cmd"VERSION=${{ steps.get_tag_name.outputs.TAG-NAME }} "
-          fi
-          
-          if [[ ! -z "${{ inputs.IMG }}" ]]; then
-            cmd=$cmd"IMG=$GOOGLE_REGISTRY_URL/${{ inputs.IMG }} "
-          elif [[ -n "${{ inputs.REPOSITORY }}" ]]; then
-            cmd=$cmd"REPOSITORY=${{ env.DOCKER_REGISTRY_URL }}/${{ inputs.REPOSITORY }} "
           fi
           
           if [[ ! -z "${{ inputs.MAKE_ARGS }}" ]]; then
