@@ -154,8 +154,14 @@ cover_space() {
 }
 
 release_message() {
+    VERSION_TAG="$VERSION"
+    if [[ "$VERSION_TAG" == "apecloud/wesql-server:"* ]]; then
+        VERSION_TAG="${VERSION_TAG#*:}"
+        VERSION_TAG="${VERSION_TAG%.*}"
+    fi
+
     curl -H "Content-Type: application/json" -X POST $BOT_WEBHOOK \
-        -d '{"msg_type":"post","content":{"post":{"zh_cn":{"title":"Release:","content":[[{"tag":"text","text":"yes master, release "},{"tag":"a","text":"['$VERSION']","href":"https://github.com/'$GITHUB_REPO'/releases/tag/'$VERSION'"},{"tag":"text","text":" is on its way..."}]]}}}}'
+        -d '{"msg_type":"post","content":{"post":{"zh_cn":{"title":"Release:","content":[[{"tag":"text","text":"yes master, release "},{"tag":"a","text":"['$VERSION']","href":"https://github.com/'$GITHUB_REPO'/releases/tag/'$VERSION_TAG'"},{"tag":"text","text":" is on its way..."}]]}}}}'
 }
 
 send_message() {
